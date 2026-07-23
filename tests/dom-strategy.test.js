@@ -75,3 +75,34 @@ test('parseAction includes the raw response text in the error when JSON is unrec
     /Raw response: "no json here at all"/
   );
 });
+
+test('parseAction coerces a numeric-string elementId to a number', () => {
+  const action = strategy.parseAction('{"type":"click","elementId":"0"}', sampleElements);
+  assert.deepEqual(action, { type: 'click', elementId: 0 });
+});
+
+test('parseAction throws when click/type/extract have no elementId at all', () => {
+  assert.throws(
+    () => strategy.parseAction('{"type":"click","x":653,"y":325}', sampleElements),
+    /no "elementId"/
+  );
+});
+
+test('parseAction throws a strategy-mismatch hint when elements list is empty and type needs an elementId', () => {
+  assert.throws(
+    () => strategy.parseAction('{"type":"click","elementId":296}', []),
+    /use "click-coordinates" with x\/y instead of "elementId"/
+  );
+});
+
+test('parseAction accepts click-coordinates with numeric x/y', () => {
+  const action = strategy.parseAction('{"type":"click-coordinates","x":653,"y":325}', []);
+  assert.deepEqual(action, { type: 'click-coordinates', x: 653, y: 325 });
+});
+
+test('parseAction throws when click-coordinates is missing x/y', () => {
+  assert.throws(
+    () => strategy.parseAction('{"type":"click-coordinates"}', []),
+    /x\/y are missing or not numbers/
+  );
+});

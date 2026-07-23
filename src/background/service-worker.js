@@ -100,18 +100,30 @@ function appendToPromptContent(content, extra) {
 }
 
 function buildDecidePrompt(task, observation) {
-  const elementIdRule = observation.elementsPrompt
-    ? ' The "elementId" field is REQUIRED for "click"/"type"/"extract" and MUST be exactly one of the '
+  // The action schema is strategy-specific: DOM strategy has no coordinates, only an element
+  // list to pick from; visual strategy has no element list, only pixel coordinates. Describing
+  // both schemas together (as a single prompt used to) let the model blend them — e.g. emitting
+  // "click" with both an invented elementId AND x/y. Only offer the fields that are actually
+  // usable for the active strategy.
+  let schema;
+  let rules;
+  if (observation.elementsPrompt) {
+    schema = '{"type":"click"|"type"|"scroll"|"extract"|"done","elementId":<integer>,"text":<string>,"deltaY":<number>}';
+    rules = ' The "elementId" field is REQUIRED for "click"/"type"/"extract" and MUST be exactly one of the '
       + 'integers shown in [brackets] at the start of a line in the element list below — copy it '
       + 'verbatim, never invent, guess, or construct an id. Example: to click the element listed as '
-      + '"[3] button ...", respond {"type":"click","elementId":3}.'
-    : '';
+      + '"[3] button ...", respond {"type":"click","elementId":3}. Do NOT use "click-coordinates" or '
+      + 'include "x"/"y" — there is no screenshot, only the element list below.';
+  } else {
+    schema = '{"type":"click-coordinates"|"scroll"|"done","x":<number>,"y":<number>,"deltaY":<number>}';
+    rules = ' There is no element list — you must use "click-coordinates" with pixel "x"/"y" from the '
+      + 'screenshot, never "click" and never "elementId" (there is nothing for an elementId to refer to).';
+  }
   const system = {
     role: 'system',
     content: 'You control a web browser to accomplish the user\'s goal. Respond with ONLY a single JSON '
-      + 'object and nothing else (no markdown, no code fences, no explanation): '
-      + '{"type":"click"|"type"|"scroll"|"extract"|"click-coordinates"|"done","elementId":<id>,"text":<string>,"x":<number>,"y":<number>,"deltaY":<number>}.'
-      + elementIdRule
+      + `object and nothing else (no markdown, no code fences, no explanation): ${schema}.`
+      + rules
       + ' Use "done" once the goal is complete.'
   };
   const viewportNote = (observation.screenshot && observation.viewportWidth && observation.viewportHeight)

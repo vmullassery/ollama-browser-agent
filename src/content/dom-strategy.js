@@ -48,14 +48,31 @@
       throw new Error(`Model response missing "type" field. Raw response: "${truncateForError(text)}"`);
     }
 
-    if (parsed.type !== 'done' && parsed.elementId !== undefined) {
+    // Models sometimes emit elementId as a numeric string (e.g. "3") instead of a number.
+    // Coerce it before comparing against the (numeric) element ids.
+    if (typeof parsed.elementId === 'string' && /^\d+$/.test(parsed.elementId)) {
+      parsed.elementId = Number(parsed.elementId);
+    }
+
+    const ELEMENT_ID_REQUIRED_TYPES = new Set(['click', 'type', 'extract']);
+    if (ELEMENT_ID_REQUIRED_TYPES.has(parsed.type)) {
+      if (parsed.elementId === undefined) {
+        throw new Error(
+          `Model response has type "${parsed.type}" but no "elementId". If there is no element list `
+          + `(visual strategy), use "click-coordinates" with x/y instead. Raw response: "${truncateForError(text)}"`
+        );
+      }
       const exists = elements.some((el) => el.id === parsed.elementId);
       if (!exists) {
         const validIds = elements.length > 0
           ? `Valid ids are 0-${elements.length - 1}.`
-          : 'The element list was empty.';
+          : 'The element list was empty — use "click-coordinates" with x/y instead of "elementId" when there is no element list.';
         throw new Error(`Model referenced unknown elementId "${parsed.elementId}". ${validIds} Raw response: "${truncateForError(text)}"`);
       }
+    }
+
+    if (parsed.type === 'click-coordinates' && (typeof parsed.x !== 'number' || typeof parsed.y !== 'number')) {
+      throw new Error(`Model response has type "click-coordinates" but x/y are missing or not numbers. Raw response: "${truncateForError(text)}"`);
     }
 
     return parsed;
