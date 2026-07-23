@@ -3,3 +3,30 @@ body { font-family: system-ui, sans-serif; padding: 12px; }
 #step-log { padding-left: 18px; }
 #step-log li { margin-bottom: 6px; font-size: 13px; }
 #approval { border: 2px solid #ff5050; padding: 8px; margin: 8px 0; }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #f0f0f0;
+}
+.status-running { background: #fff4d6; }
+.status-success { background: #e3f7e6; }
+.status-failed { background: #fde4e4; }
+.status-stopped { background: #f0f0f0; }
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #333;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
