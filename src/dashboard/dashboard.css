@@ -1,0 +1,7 @@
+body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+section { margin-bottom: 32px; }
+form { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }
+textarea { min-height: 60px; }
+#schedule-days label { margin-right: 8px; }
+li { margin-bottom: 6px; }
+li button { margin-left: 6px; }

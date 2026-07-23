@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Ollama Browser Agent — Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <h1>Ollama Browser Agent</h1>
+
+  <section>
+    <h2>Provider Profiles</h2>
+    <form id="profile-form">
+      <input type="hidden" id="profile-id">
+      <input type="text" id="profile-name" placeholder="Name" required>
+      <input type="text" id="profile-baseUrl" placeholder="Base URL" value="http://localhost:11434/v1" required>
+      <input type="text" id="profile-apiKey" placeholder="API Key (optional)">
+      <input type="text" id="profile-model" placeholder="Model" required>
+      <label><input type="checkbox" id="profile-vision"> Supports vision</label>
+      <button type="submit">Save Profile</button>
+      <button type="button" id="profile-test">Test Connection</button>
+    </form>
+    <div id="profile-test-result"></div>
+    <ul id="profile-list"></ul>
+  </section>
+
+  <section>
+    <h2>Tasks</h2>
+    <form id="task-form">
+      <input type="hidden" id="task-id">
+      <input type="text" id="task-name" placeholder="Task name" required>
+      <textarea id="task-prompt" placeholder="Instructions" required></textarea>
+      <input type="text" id="task-startUrl" placeholder="Start URL (optional)">
+      <select id="task-profile"></select>
+      <select id="task-strategy">
+        <option value="dom">DOM</option>
+        <option value="visual">Visual</option>
+      </select>
+      <select id="task-autonomy">
+        <option value="autonomous">Autonomous</option>
+        <option value="approve-sensitive">Approve sensitive actions</option>
+        <option value="approve-all">Approve every action</option>
+      </select>
+      <fieldset>
+        <legend>Schedule</legend>
+        <select id="schedule-type">
+          <option value="none">None</option>
+          <option value="once">Once</option>
+          <option value="recurring">Recurring</option>
+        </select>
+        <input type="datetime-local" id="schedule-once-at">
+        <input type="number" id="schedule-hour" placeholder="Hour (0-23)" min="0" max="23">
+        <input type="number" id="schedule-minute" placeholder="Minute (0-59)" min="0" max="59">
+        <div id="schedule-days">
+          <label><input type="checkbox" value="0">Sun</label>
+          <label><input type="checkbox" value="1">Mon</label>
+          <label><input type="checkbox" value="2">Tue</label>
+          <label><input type="checkbox" value="3">Wed</label>
+          <label><input type="checkbox" value="4">Thu</label>
+          <label><input type="checkbox" value="5">Fri</label>
+          <label><input type="checkbox" value="6">Sat</label>
+        </div>
+      </fieldset>
+      <button type="submit">Save Task</button>
+    </form>
+    <ul id="task-list"></ul>
+  </section>
+
+  <section>
+    <h2>Run History</h2>
+    <ul id="history-list"></ul>
+  </section>
+
+  <script src="../shared/id.js"></script>
+  <script src="../shared/task-model.js"></script>
+  <script src="../shared/storage.js"></script>
+  <script src="../background/provider-client.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -5,6 +5,7 @@
   "description": "Browser automation agent driven by Ollama or any OpenAI-compatible LLM/VLM endpoint.",
   "permissions": ["storage", "alarms", "activeTab", "scripting", "sidePanel", "tabs"],
   "host_permissions": ["<all_urls>"],
+  "options_page": "src/dashboard/dashboard.html",
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"
