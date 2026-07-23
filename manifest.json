@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Ollama Browser Agent",
+  "version": "0.1.0",
+  "description": "Browser automation agent driven by Ollama or any OpenAI-compatible LLM/VLM endpoint.",
+  "permissions": ["storage", "alarms", "activeTab", "scripting", "sidePanel", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Ollama Browser Agent"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "run_at": "document_idle",
+      "js": [
+        "src/content/dom-scan.js",
+        "src/content/dom-strategy.js",
+        "src/content/visual-overlay.js",
+        "src/content/page-actions.js",
+        "src/content/content-script.js"
+      ]
+    }
+  ]
+}
