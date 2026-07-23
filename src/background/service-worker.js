@@ -65,13 +65,13 @@ async function getOrCreateTaskTab(task, isScheduled) {
   if (!isScheduled && !task.startUrl) {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (activeTab) {
-      return activeTab.id;
+      return { tabId: activeTab.id, windowId: activeTab.windowId };
     }
   }
 
   const tab = await chrome.tabs.create({ url: task.startUrl || 'about:blank', active: false });
   await waitForTabComplete(tab.id);
-  return tab.id;
+  return { tabId: tab.id, windowId: tab.windowId };
 }
 
 function buildDecidePrompt(task, observation) {
@@ -92,7 +92,7 @@ function buildDecidePrompt(task, observation) {
   return [system, { role: 'user', content: textPart }];
 }
 
-function makeDeps(task, profile, tabId, onStep) {
+function makeDeps(task, profile, tabId, windowId, onStep) {
   return {
     async observe() {
       if (task.strategy === 'dom') {
@@ -100,7 +100,14 @@ function makeDeps(task, profile, tabId, onStep) {
         if (!response.ok) throw new Error(response.error || 'content script action failed');
         return { elementsPrompt: globalThis.OBA_DomStrategy.formatElementListForPrompt(response.elements), elements: response.elements };
       }
-      const dataUrl = await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
+      // captureVisibleTab can only capture the active tab of a given window, so the task's
+      // (possibly background) tab must be made active within its own window first. Since the
+      // task tab is not necessarily in the user's focused window, this does not steal window
+      // focus from whatever the user is looking at — unless the task tab happens to share a
+      // window with the user's foreground tab, in which case this will visually switch what's
+      // shown in that window. There is no Chrome extension API to screenshot a non-active tab.
+      await new Promise((resolve) => chrome.tabs.update(tabId, { active: true }, () => resolve()));
+      const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
       let viewportWidth;
       let viewportHeight;
       try {
@@ -141,9 +148,9 @@ async function runTask(task, isScheduled = false) {
   const profile = profiles.find((p) => p.id === task.providerProfileId);
   if (!profile) throw new Error(`Provider profile ${task.providerProfileId} not found`);
 
-  const tabId = await getOrCreateTaskTab(task, isScheduled);
+  const { tabId, windowId } = await getOrCreateTaskTab(task, isScheduled);
 
-  const deps = makeDeps(task, profile, tabId, (step) => {
+  const deps = makeDeps(task, profile, tabId, windowId, (step) => {
     chrome.runtime.sendMessage({ type: 'oba:runStep', taskId: task.id, step }).catch(() => {});
   });
 
