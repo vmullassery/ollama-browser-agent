@@ -57,6 +57,20 @@ function waitForTabComplete(tabId, timeoutMs = TAB_LOAD_TIMEOUT_MS) {
   });
 }
 
+// chrome.tabs.captureVisibleTab intermittently fails with "image readback failed" when called
+// immediately after the tab/window becomes active, before the compositor has painted a frame.
+// Retry with a short delay rather than surfacing a transient error as a task failure.
+async function captureVisibleTabWithRetry(windowId, attempts = 3, delayMs = 250) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+    } catch (error) {
+      if (attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 // Scheduled/background runs must not hijack whatever tab the user is currently looking at, so
 // those always open a fresh background tab. Manual "Run now" runs for a task with no startUrl
 // preserve the older "automate the page I'm looking at" workflow by reusing the active tab,
@@ -107,7 +121,7 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       // window with the user's foreground tab, in which case this will visually switch what's
       // shown in that window. There is no Chrome extension API to screenshot a non-active tab.
       await new Promise((resolve) => chrome.tabs.update(tabId, { active: true }, () => resolve()));
-      const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+      const dataUrl = await captureVisibleTabWithRetry(windowId);
       let viewportWidth;
       let viewportHeight;
       try {
