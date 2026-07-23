@@ -56,3 +56,15 @@ test('parseAction recovers a JSON object preceded by stray leading text', () => 
   const action = strategy.parseAction('Sure, here is the action:\n{"type":"click","elementId":0}', sampleElements);
   assert.deepEqual(action, { type: 'click', elementId: 0 });
 });
+
+test('parseAction recovers the first object when the model emits two JSON objects back to back', () => {
+  const action = strategy.parseAction('{"type":"click","elementId":0}\n{"type":"done"}', sampleElements);
+  assert.deepEqual(action, { type: 'click', elementId: 0 });
+});
+
+test('parseAction includes the raw response text in the error when JSON is unrecoverable', () => {
+  assert.throws(
+    () => strategy.parseAction('no json here at all', sampleElements),
+    /Raw response: "no json here at all"/
+  );
+});

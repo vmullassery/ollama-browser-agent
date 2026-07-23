@@ -17,6 +17,11 @@
     return text;
   }
 
+  function truncateForError(text) {
+    const snippet = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+    return snippet.replace(/\n/g, '\\n');
+  }
+
   function parseAction(modelText, elements) {
     const text = extractJsonCandidate(modelText);
 
@@ -24,16 +29,18 @@
     try {
       parsed = JSON.parse(text);
     } catch (firstError) {
-      // Some models emit stray commentary before/after the JSON object despite instructions
-      // not to. Fall back to the first balanced-looking {...} substring before giving up.
-      const braceMatch = text.match(/\{[\s\S]*\}/);
+      // Some models emit stray commentary before/after the JSON object, or emit more than one
+      // JSON object (e.g. one per line), despite instructions not to. Fall back to just the
+      // FIRST {...} object — a non-greedy match, since a greedy one would span multiple
+      // concatenated objects and fail to parse for the same reason as the original text.
+      const braceMatch = text.match(/\{[\s\S]*?\}/);
       if (!braceMatch) {
-        throw new Error(`Model response was not valid JSON: ${firstError.message}`);
+        throw new Error(`Model response was not valid JSON: ${firstError.message}. Raw response: "${truncateForError(text)}"`);
       }
       try {
         parsed = JSON.parse(braceMatch[0]);
       } catch (secondError) {
-        throw new Error(`Model response was not valid JSON: ${secondError.message}`);
+        throw new Error(`Model response was not valid JSON: ${secondError.message}. Raw response: "${truncateForError(text)}"`);
       }
     }
 
