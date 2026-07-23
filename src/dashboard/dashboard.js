@@ -109,6 +109,35 @@ function readTaskForm() {
   });
 }
 
+function populateTaskForm(task) {
+  document.getElementById('task-id').value = task.id;
+  document.getElementById('task-name').value = task.name;
+  document.getElementById('task-prompt').value = task.prompt;
+  document.getElementById('task-startUrl').value = task.startUrl || '';
+  taskProfileSelect.value = task.providerProfileId;
+  document.getElementById('task-strategy').value = task.strategy;
+  document.getElementById('task-autonomy').value = task.autonomyMode;
+
+  const schedule = task.schedule;
+  scheduleType.value = schedule ? schedule.type : 'none';
+  document.getElementById('schedule-once-at').value = '';
+  document.getElementById('schedule-hour').value = '';
+  document.getElementById('schedule-minute').value = '';
+  document.querySelectorAll('#schedule-days input[type=checkbox]').forEach((el) => { el.checked = false; });
+
+  if (schedule?.type === 'once') {
+    const local = new Date(schedule.at - new Date(schedule.at).getTimezoneOffset() * 60000);
+    document.getElementById('schedule-once-at').value = local.toISOString().slice(0, 16);
+  } else if (schedule?.type === 'recurring') {
+    document.getElementById('schedule-hour').value = schedule.hour;
+    document.getElementById('schedule-minute').value = schedule.minute;
+    schedule.daysOfWeek.forEach((day) => {
+      const checkbox = document.querySelector(`#schedule-days input[value="${day}"]`);
+      if (checkbox) checkbox.checked = true;
+    });
+  }
+}
+
 async function renderTasks() {
   const tasks = await globalThis.OBA_Storage.getTasks();
   taskList.innerHTML = '';
@@ -117,9 +146,17 @@ async function renderTasks() {
     const li = document.createElement('li');
     li.textContent = `${task.name} [${task.strategy}/${task.autonomyMode}]`;
 
+    const editBtn = document.createElement('button');
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => populateTaskForm(task));
+
     const runBtn = document.createElement('button');
     runBtn.textContent = 'Run now';
     runBtn.addEventListener('click', () => {
+      if (task.autonomyMode !== 'autonomous') {
+        alert('This task requires approving actions as it runs. Run it from the side panel instead, where approval prompts are shown.');
+        return;
+      }
       chrome.runtime.sendMessage({ type: 'oba:runTaskNow', task });
     });
 
@@ -130,7 +167,7 @@ async function renderTasks() {
       await renderTasks();
     });
 
-    li.append(runBtn, deleteBtn);
+    li.append(editBtn, runBtn, deleteBtn);
     taskList.appendChild(li);
   });
 }
