@@ -23,8 +23,17 @@
   const MAX_CONSECUTIVE_FAILURES = 1;
 
   async function runStep({ task, deps, history }) {
-    const observation = await deps.observe(task);
-    const action = await deps.decide(task, observation, history);
+    let observation;
+    let action;
+    try {
+      observation = await deps.observe(task);
+      action = await deps.decide(task, observation, history);
+    } catch (error) {
+      // Per the retry policy, a failed step (including a bad observation or a model response
+      // that fails to parse/validate, e.g. a hallucinated elementId) gets one retry via
+      // runTask's consecutive-failure counter, which calls runStep again and re-observes.
+      return { action: null, observation: observation || null, status: 'failed', error: error.message };
+    }
 
     const needsApproval = task.autonomyMode === 'approve-all'
       || (task.autonomyMode === 'approve-sensitive' && isSensitiveAction(action, observation?.elements));

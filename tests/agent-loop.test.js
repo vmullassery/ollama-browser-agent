@@ -96,6 +96,39 @@ test('runStep marks the step failed when execute throws', async () => {
   assert.equal(result.error, 'boom');
 });
 
+test('runStep marks the step failed when decide throws (e.g. a hallucinated elementId)', async () => {
+  const deps = {
+    observe: async () => ({ elements: [] }),
+    decide: async () => { throw new Error('Model referenced unknown elementId "6239"'); },
+    requestApproval: async () => { throw new Error('should not be called'); },
+    execute: async () => { throw new Error('should not be called'); },
+    recordStep: async () => {}
+  };
+  const result = await runStep({ task: makeTask(), deps, history: [] });
+  assert.equal(result.status, 'failed');
+  assert.match(result.error, /unknown elementId/);
+});
+
+test('runTask retries once and recovers when decide fails once then succeeds', async () => {
+  let decideCalls = 0;
+  const deps = {
+    observe: async () => ({}),
+    decide: async () => {
+      decideCalls += 1;
+      if (decideCalls === 1) throw new Error('bad json');
+      return { type: 'done' };
+    },
+    requestApproval: async () => true,
+    execute: async () => ({ done: true }),
+    recordStep: async () => {}
+  };
+  const result = await runTask(makeTask(), deps);
+  assert.equal(result.status, 'success');
+  assert.equal(decideCalls, 2);
+  assert.equal(result.steps.length, 2);
+  assert.equal(result.steps[0].status, 'failed');
+});
+
 test('runTask returns success as soon as the model returns a "done" action', async () => {
   const deps = {
     observe: async () => ({}),

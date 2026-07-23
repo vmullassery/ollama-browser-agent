@@ -65,7 +65,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'oba:runStep') {
     if (message.taskId !== runningTaskId) return false;
     const li = document.createElement('li');
-    li.textContent = `${message.step.status}: ${JSON.stringify(message.step.action)}`;
+    const detail = message.step.status === 'failed' && message.step.error
+      ? message.step.error
+      : JSON.stringify(message.step.action);
+    li.textContent = `${message.step.status}: ${detail}`;
     stepLog.appendChild(li);
     setStatus('running', `Running… (step ${stepLog.children.length})`);
     return false;
