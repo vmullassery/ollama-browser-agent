@@ -8,9 +8,24 @@ function makeTask(overrides = {}) {
   return { id: 't1', prompt: 'do it', autonomyMode: 'autonomous', ...overrides };
 }
 
-test('isSensitiveAction flags submit/purchase/download/navigate-new-domain', () => {
-  assert.equal(isSensitiveAction({ type: 'submit' }), true);
-  assert.equal(isSensitiveAction({ type: 'click' }), false);
+test('isSensitiveAction flags a click on a submit/purchase/download-like element', () => {
+  const elements = [
+    { id: 0, text: 'Submit' },
+    { id: 1, text: 'Buy now' },
+    { id: 2, text: 'Cancel' }
+  ];
+  assert.equal(isSensitiveAction({ type: 'click', elementId: 0 }, elements), true);
+  assert.equal(isSensitiveAction({ type: 'click', elementId: 1 }, elements), true);
+  assert.equal(isSensitiveAction({ type: 'click', elementId: 2 }, elements), false);
+});
+
+test('isSensitiveAction always flags click-coordinates (screenshot clicks cannot be pre-classified)', () => {
+  assert.equal(isSensitiveAction({ type: 'click-coordinates', x: 10, y: 20 }), true);
+});
+
+test('isSensitiveAction does not flag non-click actions', () => {
+  assert.equal(isSensitiveAction({ type: 'scroll', deltaY: 400 }), false);
+  assert.equal(isSensitiveAction({ type: 'done' }), false);
 });
 
 test('runStep executes the decided action on the happy path', async () => {
@@ -29,8 +44,8 @@ test('runStep executes the decided action on the happy path', async () => {
 test('runStep asks for approval on a sensitive action in approve-sensitive mode, and stops if denied', async () => {
   let executeCalled = false;
   const deps = {
-    observe: async () => ({}),
-    decide: async () => ({ type: 'submit' }),
+    observe: async () => ({ elements: [{ id: 0, text: 'Submit' }] }),
+    decide: async () => ({ type: 'click', elementId: 0 }),
     requestApproval: async () => false,
     execute: async () => { executeCalled = true; },
     recordStep: async () => {}
@@ -38,6 +53,20 @@ test('runStep asks for approval on a sensitive action in approve-sensitive mode,
   const result = await runStep({ task: makeTask({ autonomyMode: 'approve-sensitive' }), deps, history: [] });
   assert.equal(result.status, 'rejected');
   assert.equal(executeCalled, false);
+});
+
+test('runStep asks for approval on a click-coordinates action in approve-sensitive mode', async () => {
+  let approvalCalled = false;
+  const deps = {
+    observe: async () => ({ screenshot: 'data:image/png;base64,x' }),
+    decide: async () => ({ type: 'click-coordinates', x: 10, y: 20 }),
+    requestApproval: async () => { approvalCalled = true; return true; },
+    execute: async () => ({}),
+    recordStep: async () => {}
+  };
+  const result = await runStep({ task: makeTask({ autonomyMode: 'approve-sensitive' }), deps, history: [] });
+  assert.equal(approvalCalled, true);
+  assert.equal(result.status, 'done');
 });
 
 test('runStep does not ask for approval on a non-sensitive action in approve-sensitive mode', async () => {
@@ -98,7 +127,7 @@ test('runTask retries a failing step exactly once before aborting the run', asyn
 test('runTask stops immediately when a step is rejected', async () => {
   const deps = {
     observe: async () => ({}),
-    decide: async () => ({ type: 'submit' }),
+    decide: async () => ({ type: 'click', elementId: 0 }),
     requestApproval: async () => false,
     execute: async () => { throw new Error('should not be called'); },
     recordStep: async () => {}
