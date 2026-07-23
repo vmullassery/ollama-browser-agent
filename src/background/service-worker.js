@@ -18,11 +18,59 @@ function sendToContentScript(tabId, message) {
   });
 }
 
-// Scheduled/background runs must not hijack whatever tab the user is currently looking at, and
-// the side panel / dashboard already surface run progress via the message log, so every task run
-// (manual or scheduled) opens its own background tab rather than reusing/steering the active one.
-async function getOrCreateTaskTab(task) {
+const TAB_LOAD_TIMEOUT_MS = 15000;
+
+// Waits for a tab to finish loading before we touch it, so the first observe() doesn't race the
+// content script (which only attaches at document_idle). Resolves early if the tab already
+// reports status 'complete', and gives up after a timeout rather than hanging the run forever.
+function waitForTabComplete(tabId, timeoutMs = TAB_LOAD_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      resolve();
+    };
+
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        finish();
+      }
+    }
+
+    const timer = setTimeout(finish, timeoutMs);
+
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        finish();
+        return;
+      }
+      if (settled) return;
+      if (tab && tab.status === 'complete') {
+        finish();
+        return;
+      }
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  });
+}
+
+// Scheduled/background runs must not hijack whatever tab the user is currently looking at, so
+// those always open a fresh background tab. Manual "Run now" runs for a task with no startUrl
+// preserve the older "automate the page I'm looking at" workflow by reusing the active tab,
+// since there's no URL to open a fresh tab against and the user is watching the run anyway.
+async function getOrCreateTaskTab(task, isScheduled) {
+  if (!isScheduled && !task.startUrl) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab) {
+      return activeTab.id;
+    }
+  }
+
   const tab = await chrome.tabs.create({ url: task.startUrl || 'about:blank', active: false });
+  await waitForTabComplete(tab.id);
   return tab.id;
 }
 
@@ -88,12 +136,12 @@ function makeDeps(task, profile, tabId, onStep) {
   };
 }
 
-async function runTask(task) {
+async function runTask(task, isScheduled = false) {
   const profiles = await globalThis.OBA_Storage.getProfiles();
   const profile = profiles.find((p) => p.id === task.providerProfileId);
   if (!profile) throw new Error(`Provider profile ${task.providerProfileId} not found`);
 
-  const tabId = await getOrCreateTaskTab(task);
+  const tabId = await getOrCreateTaskTab(task, isScheduled);
 
   const deps = makeDeps(task, profile, tabId, (step) => {
     chrome.runtime.sendMessage({ type: 'oba:runStep', taskId: task.id, step }).catch(() => {});
@@ -116,7 +164,7 @@ async function runTask(task) {
 const scheduler = globalThis.OBA_Scheduler.wireScheduler({
   getTasks: () => globalThis.OBA_Storage.getTasks(),
   saveTask: (task) => globalThis.OBA_Storage.saveTask(task),
-  runTask,
+  runTask: (task) => runTask(task, true),
   alarms: chrome.alarms,
   now: () => Date.now()
 });
