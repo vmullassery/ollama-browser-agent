@@ -126,6 +126,10 @@ function buildDecidePrompt(task, observation) {
 }
 
 function makeDeps(task, profile, tabId, windowId, onStep) {
+  // Captured so recordStep can attach it to the step sent to the UI — lets the side panel show
+  // exactly what the model said for every step (success or failure) without opening devtools.
+  let lastRawModelResponse = null;
+
   return {
     async observe() {
       if (task.strategy === 'dom') {
@@ -155,6 +159,7 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       return { screenshot: dataUrl, viewportWidth, viewportHeight };
     },
     async decide(currentTask, observation, history) {
+      lastRawModelResponse = null;
       const lastStep = history && history.length > 0 ? history[history.length - 1] : null;
       const correction = lastStep && lastStep.status === 'failed'
         ? `\n\nYour previous response was invalid: ${lastStep.error}. Re-read the element list carefully and respond with a corrected JSON action.`
@@ -162,6 +167,7 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       const messages = buildDecidePrompt(currentTask, observation);
       messages[messages.length - 1].content = appendToPromptContent(messages[messages.length - 1].content, correction);
       const content = await globalThis.OBA_ProviderClient.callProvider(profile, messages);
+      lastRawModelResponse = content;
       return globalThis.OBA_DomStrategy.parseAction(content, observation.elements || []);
     },
     async requestApproval(action) {
@@ -176,7 +182,7 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       return response.result;
     },
     async recordStep(stepResult) {
-      onStep(stepResult);
+      onStep({ ...stepResult, rawModelResponse: lastRawModelResponse });
     }
   };
 }

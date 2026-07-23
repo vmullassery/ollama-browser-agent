@@ -37,6 +37,13 @@ test('parseAction throws when elementId is not in the element list', () => {
   assert.throws(() => strategy.parseAction('{"type":"click","elementId":99}', sampleElements), /unknown elementId/);
 });
 
+test('parseAction includes the valid id range and raw response when elementId is unknown', () => {
+  assert.throws(
+    () => strategy.parseAction('{"type":"click","elementId":99}', sampleElements),
+    /Valid ids are 0-1\. Raw response: "\{"type":"click","elementId":99\}"/
+  );
+});
+
 test('parseAction strips a markdown code fence around the JSON', () => {
   const action = strategy.parseAction('```json\n{"type":"click","elementId":0}\n```', sampleElements);
   assert.deepEqual(action, { type: 'click', elementId: 0 });

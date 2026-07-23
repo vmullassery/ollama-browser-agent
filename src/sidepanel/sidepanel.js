@@ -69,6 +69,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ? message.step.error
       : JSON.stringify(message.step.action);
     li.textContent = `${message.step.status}: ${detail}`;
+
+    if (message.step.rawModelResponse) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'Model output';
+      const pre = document.createElement('pre');
+      pre.textContent = message.step.rawModelResponse;
+      details.append(summary, pre);
+      li.appendChild(details);
+    }
+
     stepLog.appendChild(li);
     setStatus('running', `Running… (step ${stepLog.children.length})`);
     return false;

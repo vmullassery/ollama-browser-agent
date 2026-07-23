@@ -45,13 +45,16 @@
     }
 
     if (!parsed || typeof parsed !== 'object' || !parsed.type) {
-      throw new Error('Model response missing "type" field');
+      throw new Error(`Model response missing "type" field. Raw response: "${truncateForError(text)}"`);
     }
 
     if (parsed.type !== 'done' && parsed.elementId !== undefined) {
       const exists = elements.some((el) => el.id === parsed.elementId);
       if (!exists) {
-        throw new Error(`Model referenced unknown elementId "${parsed.elementId}"`);
+        const validIds = elements.length > 0
+          ? `Valid ids are 0-${elements.length - 1}.`
+          : 'The element list was empty.';
+        throw new Error(`Model referenced unknown elementId "${parsed.elementId}". ${validIds} Raw response: "${truncateForError(text)}"`);
       }
     }
 
