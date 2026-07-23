@@ -1,0 +1,5 @@
+body { font-family: system-ui, sans-serif; padding: 12px; }
+.hidden { display: none; }
+#step-log { padding-left: 18px; }
+#step-log li { margin-bottom: 6px; font-size: 13px; }
+#approval { border: 2px solid #ff5050; padding: 8px; margin: 8px 0; }
