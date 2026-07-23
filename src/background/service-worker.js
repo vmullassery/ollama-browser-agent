@@ -88,17 +88,36 @@ async function getOrCreateTaskTab(task, isScheduled) {
   return { tabId: tab.id, windowId: tab.windowId };
 }
 
+// The user message content is either a plain string (DOM strategy) or an array of parts
+// (visual strategy, e.g. [{type:'text',...}, {type:'image_url',...}]) — append the correction
+// to the string, or to the first text part, in either shape.
+function appendToPromptContent(content, extra) {
+  if (!extra) return content;
+  if (typeof content === 'string') return content + extra;
+  const textPart = content.find((part) => part.type === 'text');
+  if (textPart) textPart.text += extra;
+  return content;
+}
+
 function buildDecidePrompt(task, observation) {
+  const elementIdRule = observation.elementsPrompt
+    ? ' The "elementId" field is REQUIRED for "click"/"type"/"extract" and MUST be exactly one of the '
+      + 'integers shown in [brackets] at the start of a line in the element list below — copy it '
+      + 'verbatim, never invent, guess, or construct an id. Example: to click the element listed as '
+      + '"[3] button ...", respond {"type":"click","elementId":3}.'
+    : '';
   const system = {
     role: 'system',
-    content: 'You control a web browser to accomplish the user\'s goal. Respond ONLY with JSON: '
-      + '{"type":"click"|"type"|"scroll"|"extract"|"click-coordinates"|"done","elementId":<id>,"text":<string>,"x":<number>,"y":<number>,"deltaY":<number>}. '
-      + 'Use "done" once the goal is complete.'
+    content: 'You control a web browser to accomplish the user\'s goal. Respond with ONLY a single JSON '
+      + 'object and nothing else (no markdown, no code fences, no explanation): '
+      + '{"type":"click"|"type"|"scroll"|"extract"|"click-coordinates"|"done","elementId":<id>,"text":<string>,"x":<number>,"y":<number>,"deltaY":<number>}.'
+      + elementIdRule
+      + ' Use "done" once the goal is complete.'
   };
   const viewportNote = (observation.screenshot && observation.viewportWidth && observation.viewportHeight)
     ? ` The screenshot is ${observation.viewportWidth}x${observation.viewportHeight} CSS pixels; respond with click-coordinates x/y in that same coordinate space.`
     : '';
-  const textPart = `Goal: ${task.prompt}\n\n${observation.elementsPrompt ? `Current page elements:\n${observation.elementsPrompt}` : `A screenshot of the current page is attached.${viewportNote}`}`;
+  const textPart = `Goal: ${task.prompt}\n\n${observation.elementsPrompt ? `Current page elements (choose elementId only from these):\n${observation.elementsPrompt}` : `A screenshot of the current page is attached.${viewportNote}`}`;
 
   if (observation.screenshot) {
     return [system, { role: 'user', content: [{ type: 'text', text: textPart }, { type: 'image_url', image_url: { url: observation.screenshot } }] }];
@@ -135,8 +154,13 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       }
       return { screenshot: dataUrl, viewportWidth, viewportHeight };
     },
-    async decide(currentTask, observation) {
+    async decide(currentTask, observation, history) {
+      const lastStep = history && history.length > 0 ? history[history.length - 1] : null;
+      const correction = lastStep && lastStep.status === 'failed'
+        ? `\n\nYour previous response was invalid: ${lastStep.error}. Re-read the element list carefully and respond with a corrected JSON action.`
+        : '';
       const messages = buildDecidePrompt(currentTask, observation);
+      messages[messages.length - 1].content = appendToPromptContent(messages[messages.length - 1].content, correction);
       const content = await globalThis.OBA_ProviderClient.callProvider(profile, messages);
       return globalThis.OBA_DomStrategy.parseAction(content, observation.elements || []);
     },
