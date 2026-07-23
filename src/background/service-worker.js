@@ -108,14 +108,14 @@ function buildDecidePrompt(task, observation) {
   let schema;
   let rules;
   if (observation.elementsPrompt) {
-    schema = '{"type":"click"|"type"|"scroll"|"extract"|"done","elementId":<integer>,"text":<string>,"deltaY":<number>}';
+    schema = '{"type":"click"|"type"|"scroll"|"extract"|"done"|"blocked","elementId":<integer>,"text":<string>,"deltaY":<number>,"reason":<string>}';
     rules = ' The "elementId" field is REQUIRED for "click"/"type"/"extract" and MUST be exactly one of the '
       + 'integers shown in [brackets] at the start of a line in the element list below — copy it '
       + 'verbatim, never invent, guess, or construct an id. Example: to click the element listed as '
       + '"[3] button ...", respond {"type":"click","elementId":3}. Do NOT use "click-coordinates" or '
       + 'include "x"/"y" — there is no screenshot, only the element list below.';
   } else {
-    schema = '{"type":"click-coordinates"|"scroll"|"done","x":<number>,"y":<number>,"deltaY":<number>}';
+    schema = '{"type":"click-coordinates"|"scroll"|"done"|"blocked","x":<number>,"y":<number>,"deltaY":<number>,"reason":<string>}';
     rules = ' There is no element list — you must use "click-coordinates" with pixel "x"/"y" from the '
       + 'screenshot, never "click" and never "elementId" (there is nothing for an elementId to refer to).';
   }
@@ -124,7 +124,10 @@ function buildDecidePrompt(task, observation) {
     content: 'You control a web browser to accomplish the user\'s goal. Respond with ONLY a single JSON '
       + `object and nothing else (no markdown, no code fences, no explanation): ${schema}.`
       + rules
-      + ' Use "done" once the goal is complete.'
+      + ' Use "done" ONLY once the goal has actually been accomplished. If you cannot proceed — the '
+      + 'page does not match what the goal expects, a required control is missing, or you are stuck — '
+      + 'respond {"type":"blocked","reason":"<why, briefly>"} instead of "done". Never use "done" to '
+      + 'mean "I give up" or "I cannot do this".'
   };
   const viewportNote = (observation.screenshot && observation.viewportWidth && observation.viewportHeight)
     ? ` The screenshot is ${observation.viewportWidth}x${observation.viewportHeight} CSS pixels; respond with click-coordinates x/y in that same coordinate space.`
@@ -188,7 +191,7 @@ function makeDeps(task, profile, tabId, windowId, onStep) {
       });
     },
     async execute(action) {
-      if (action.type === 'done') return { done: true };
+      if (action.type === 'done' || action.type === 'blocked') return { done: true };
       const response = await sendToContentScript(tabId, { type: 'oba:executeAction', action });
       if (!response.ok) throw new Error(response.error || 'content script action failed');
       return response.result;

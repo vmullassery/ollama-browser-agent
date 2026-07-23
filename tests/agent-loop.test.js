@@ -142,6 +142,33 @@ test('runTask returns success as soon as the model returns a "done" action', asy
   assert.equal(result.steps.length, 1);
 });
 
+test('runTask reports a "blocked" action as failed, not success', async () => {
+  const deps = {
+    observe: async () => ({}),
+    decide: async () => ({ type: 'blocked', reason: 'page not as expected' }),
+    requestApproval: async () => true,
+    execute: async () => ({ done: true }),
+    recordStep: async () => {}
+  };
+  const result = await runTask(makeTask(), deps);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.reason, 'page not as expected');
+  assert.equal(result.steps.length, 1);
+});
+
+test('runTask falls back to a generic reason when "blocked" has no "reason" field', async () => {
+  const deps = {
+    observe: async () => ({}),
+    decide: async () => ({ type: 'blocked' }),
+    requestApproval: async () => true,
+    execute: async () => ({ done: true }),
+    recordStep: async () => {}
+  };
+  const result = await runTask(makeTask(), deps);
+  assert.equal(result.status, 'failed');
+  assert.match(result.reason, /blocked/);
+});
+
 test('runTask retries a failing step exactly once before aborting the run', async () => {
   let executeCalls = 0;
   const deps = {

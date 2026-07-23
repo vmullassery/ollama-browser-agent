@@ -79,6 +79,14 @@
       if (stepResult.action?.type === 'done') {
         return { status: 'success', steps: history };
       }
+
+      // "blocked" is the model's own signal that it cannot proceed (e.g. the page doesn't match
+      // what it expected) — distinct from "done", which means the goal was actually accomplished.
+      // Reporting this as 'failed' rather than 'success' is what makes the side panel show
+      // "Failed: ..." instead of a misleading "Done".
+      if (stepResult.action?.type === 'blocked') {
+        return { status: 'failed', reason: stepResult.action.reason || 'model reported it was blocked', steps: history };
+      }
     }
 
     return { status: 'failed', reason: 'max steps exceeded', steps: history };
