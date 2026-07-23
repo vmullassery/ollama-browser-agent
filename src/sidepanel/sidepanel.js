@@ -21,11 +21,18 @@ async function loadTasks() {
 }
 
 runBtn.addEventListener('click', async () => {
-  const tasks = await loadTasks();
-  const task = tasks.find((t) => t.id === taskSelect.value);
+  const selectedTaskId = taskSelect.value;
+  const tasks = await globalThis.OBA_Storage.getTasks();
+  const task = tasks.find((t) => t.id === selectedTaskId);
   if (!task) return;
   stepLog.innerHTML = '';
-  chrome.runtime.sendMessage({ type: 'oba:runTaskNow', task });
+  chrome.runtime.sendMessage({ type: 'oba:runTaskNow', task }, (response) => {
+    if (response && response.ok === false) {
+      const li = document.createElement('li');
+      li.textContent = `error: ${response.error}`;
+      stepLog.appendChild(li);
+    }
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
