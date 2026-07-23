@@ -18,9 +18,11 @@ function sendToContentScript(tabId, message) {
   });
 }
 
-async function getActiveTabId() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) throw new Error('No active tab found');
+// Scheduled/background runs must not hijack whatever tab the user is currently looking at, and
+// the side panel / dashboard already surface run progress via the message log, so every task run
+// (manual or scheduled) opens its own background tab rather than reusing/steering the active one.
+async function getOrCreateTaskTab(task) {
+  const tab = await chrome.tabs.create({ url: task.startUrl || 'about:blank', active: false });
   return tab.id;
 }
 
@@ -31,7 +33,10 @@ function buildDecidePrompt(task, observation) {
       + '{"type":"click"|"type"|"scroll"|"extract"|"click-coordinates"|"done","elementId":<id>,"text":<string>,"x":<number>,"y":<number>,"deltaY":<number>}. '
       + 'Use "done" once the goal is complete.'
   };
-  const textPart = `Goal: ${task.prompt}\n\n${observation.elementsPrompt ? `Current page elements:\n${observation.elementsPrompt}` : 'A screenshot of the current page is attached.'}`;
+  const viewportNote = (observation.screenshot && observation.viewportWidth && observation.viewportHeight)
+    ? ` The screenshot is ${observation.viewportWidth}x${observation.viewportHeight} CSS pixels; respond with click-coordinates x/y in that same coordinate space.`
+    : '';
+  const textPart = `Goal: ${task.prompt}\n\n${observation.elementsPrompt ? `Current page elements:\n${observation.elementsPrompt}` : `A screenshot of the current page is attached.${viewportNote}`}`;
 
   if (observation.screenshot) {
     return [system, { role: 'user', content: [{ type: 'text', text: textPart }, { type: 'image_url', image_url: { url: observation.screenshot } }] }];
@@ -48,7 +53,18 @@ function makeDeps(task, profile, tabId, onStep) {
         return { elementsPrompt: globalThis.OBA_DomStrategy.formatElementListForPrompt(response.elements), elements: response.elements };
       }
       const dataUrl = await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
-      return { screenshot: dataUrl };
+      let viewportWidth;
+      let viewportHeight;
+      try {
+        const viewport = await sendToContentScript(tabId, { type: 'oba:captureViewportSize' });
+        if (viewport?.ok) {
+          viewportWidth = viewport.width;
+          viewportHeight = viewport.height;
+        }
+      } catch (error) {
+        // Non-fatal: fall back to sending the screenshot without a coordinate-space hint.
+      }
+      return { screenshot: dataUrl, viewportWidth, viewportHeight };
     },
     async decide(currentTask, observation) {
       const messages = buildDecidePrompt(currentTask, observation);
@@ -77,10 +93,7 @@ async function runTask(task) {
   const profile = profiles.find((p) => p.id === task.providerProfileId);
   if (!profile) throw new Error(`Provider profile ${task.providerProfileId} not found`);
 
-  const tabId = await getActiveTabId();
-  if (task.startUrl) {
-    await chrome.tabs.update(tabId, { url: task.startUrl });
-  }
+  const tabId = await getOrCreateTaskTab(task);
 
   const deps = makeDeps(task, profile, tabId, (step) => {
     chrome.runtime.sendMessage({ type: 'oba:runStep', taskId: task.id, step }).catch(() => {});
