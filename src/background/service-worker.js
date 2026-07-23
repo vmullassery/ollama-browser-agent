@@ -1,6 +1,7 @@
 import '../shared/id.js';
 import '../shared/task-model.js';
 import '../shared/storage.js';
+import '../content/dom-strategy.js';
 import './provider-client.js';
 import './scheduler.js';
 import './agent-loop.js';
@@ -43,6 +44,7 @@ function makeDeps(task, profile, tabId, onStep) {
     async observe() {
       if (task.strategy === 'dom') {
         const response = await sendToContentScript(tabId, { type: 'oba:scanDom' });
+        if (!response.ok) throw new Error(response.error || 'content script action failed');
         return { elementsPrompt: globalThis.OBA_DomStrategy.formatElementListForPrompt(response.elements), elements: response.elements };
       }
       const dataUrl = await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
@@ -60,7 +62,9 @@ function makeDeps(task, profile, tabId, onStep) {
     },
     async execute(action) {
       if (action.type === 'done') return { done: true };
-      return sendToContentScript(tabId, { type: 'oba:executeAction', action });
+      const response = await sendToContentScript(tabId, { type: 'oba:executeAction', action });
+      if (!response.ok) throw new Error(response.error || 'content script action failed');
+      return response.result;
     },
     async recordStep(stepResult) {
       onStep(stepResult);
